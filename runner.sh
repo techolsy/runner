@@ -1,0 +1,433 @@
+#!/usr/bin/env bash
+
+set -u
+
+RUNNER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$RUNNER_DIR/lib"
+INTERRUPTED=0
+
+handle_interrupt() {
+  INTERRUPTED=1
+}
+
+trap handle_interrupt INT
+
+PERSIST_FILE="$(mktemp)"
+chmod 600 "$PERSIST_FILE"
+
+cleanup_runner() {
+  rm -f "$PERSIST_FILE"
+}
+
+trap cleanup_runner EXIT
+
+for lib in "$LIB_DIR"/*.sh; do
+  [[ -f "$lib" ]] || continue
+  #shellcheck  disable=SC1090
+  source "$lib"
+done
+
+declare -a TASK_NAMES
+declare -a TASK_COMMANDS
+declare -a TASK_VARS
+declare -a TASK_SECRETS
+declare -a RUNNER_VARS
+declare -a RUNNER_SECRETS
+
+persist() {
+  local name="$1"
+
+  if [[ ! "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    echo "persist: invalid variable name: $name" >&2
+    return 1
+  fi
+
+  if [[ -z "${!name+x}" ]]; then
+    echo "persist: variable is not set: $name" >&2
+    return 1
+  fi
+
+  printf '%s=%s\n' "$name" "${!name}" >> "$PERSIST_FILE"
+
+  echo "Persist requested: $name" >&2
+}
+
+forget() {
+  local name="$1"
+
+  if [[ ! "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    echo "forget: invalid variable name: $name" >&2
+    return 1
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+
+  chmod 600 "$tmp"
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    local var_name="${line%%=*}"
+
+    if [[ "$var_name" != "$name" ]]; then
+      printf '%s\n' "$line" >> "$tmp"
+    fi
+  done < "$PERSIST_FILE"
+
+  mv "$tmp" "$PERSIST_FILE"
+
+  echo "Forgot: $name" >&2
+}
+
+load_persisted_vars() {
+  local var
+  local var_name
+  local var_value
+
+  while IFS= read -r var; do
+    [[ -z "$var" ]] && continue
+
+    var_name="${var%%=*}"
+    var_value="${var#*=}"
+
+    printf -v "$var_name" '%s' "$var_value"
+    #shellcheck disable=SC2163
+    export "$var_name"
+
+  done < "$PERSIST_FILE"
+}
+
+task() {
+  local name="$1"
+  shift
+
+  local command
+  local vars=""
+  local secrets=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --var)
+        if [[ $# -lt 2 ]]; then
+            echo "task: --var requires NAME=value" >&2
+            return 1
+        fi
+
+        vars+="$2"$'\n'
+        shift 2
+        ;;
+
+      --secret)
+        if [[ $# -lt 2 ]]; then
+          echo "task: --secret requires NAME" >&2
+          return 1
+        fi
+
+        secrets+="$2"$'\n'
+        shift 2
+        ;;
+
+      *)
+        echo "task: unknown option: $1" >&2
+        return 1
+        ;;
+    esac
+  done
+
+  command="$(cat)"
+
+  TASK_NAMES+=("$name")
+  TASK_COMMANDS+=("$command")
+  TASK_VARS+=("$vars")
+  TASK_SECRETS+=("$secrets")
+}
+
+load_workflow() {
+  local workflow="$1"
+
+  if [[ ! -f "$workflow" ]]; then
+      echo "Workflow not found: $workflow"
+      exit 1
+  fi
+
+  #shellcheck disable=SC1090
+  source "$workflow"
+}
+
+run_task() {
+  local index="$1"
+  local name="${TASK_NAMES[$index]}"
+  local command="${TASK_COMMANDS[$index]}"
+  local vars="${TASK_VARS[$index]}"
+  local secrets="${TASK_SECRETS[$index]}"
+  local secret
+  local status
+
+  echo
+  echo "========================================"
+  echo " Task $((index + 1))/${#TASK_NAMES[@]}: $name"
+  echo "========================================"
+  echo
+
+  printf '%s\n' "$command"
+
+  echo "----------------------------------------"
+
+  (
+    load_persisted_vars
+
+    for var in "${RUNNER_VARS[@]}"; do
+      local var_name="${var%%=*}"
+      local var_value="${var#*=}"
+
+      printf -v "$var_name" '%s' "$var_value"
+      #shellcheck disable=SC2163
+      export "$var_name"
+    done
+
+    for secret in "${RUNNER_SECRETS[@]}"; do
+      if ! secret_load "$secret"; then
+        return 1
+      fi
+    done
+
+    while IFS= read -r var; do
+      [[ -z "$var" ]] && continue
+
+      local var_name="${var%%=*}"
+      local var_value="${var#*=}"
+
+      printf -v "$var_name" '%s' "$var_value"
+      #shellcheck disable=SC2163
+      export "$var_name"
+    done <<< "$vars"
+
+    while IFS= read -r secret; do
+      [[ -z "$secret" ]] && continue
+
+      if ! secret_load "$secret"; then
+        return 1
+      fi
+    done <<< "$secrets"
+
+    set -e
+    eval "$command"
+  )
+
+  status=$?
+
+  if (( status == 0 )); then
+    load_persisted_vars
+  fi
+
+  echo "----------------------------------------"
+
+  if (( INTERRUPTED )); then
+    echo "Task interrupted."
+    return 130
+  fi
+
+  return "$status"
+}
+
+edit_task() {
+  local index="$1"
+  local tmp
+
+  tmp="$(mktemp)"
+
+  printf '%s\n' "${TASK_COMMANDS[$index]}" > "$tmp"
+
+  "${EDITOR:-vi}" "$tmp"
+
+  TASK_COMMANDS[$index]="$(cat "$tmp")"
+
+  rm -f "$tmp"
+}
+
+handle_failure() {
+  local index="$1"
+  local name="${TASK_NAMES[$index]}"
+
+  while true; do
+    echo
+    echo "Task failed: $name"
+    echo
+    echo "  [r] Retry"
+    echo "  [e] Edit task"
+    echo "  [s] Skip task"
+    echo "  [a] Abort"
+    echo
+
+    read -r -p "> " choice
+
+    case "$choice" in
+      r|R)
+        return 0
+        ;;
+
+      e|E)
+        edit_task "$index"
+        echo
+        echo "Task updated."
+        echo
+        return 0
+        ;;
+
+      s|S)
+        echo "Skipping task."
+        return 1
+        ;;
+
+      a|A)
+        echo "Aborted."
+        exit 1
+        ;;
+
+      *)
+        echo "Unknown option."
+        ;;
+    esac
+  done
+}
+
+main() {
+  if [[ $# -ge 1 && "$1" == "secrets" ]]; then
+    shift
+
+    case "${1:-}" in
+      create)
+        if [[ $# -ne 2 ]]; then
+          echo "Usage: $0 secrets create NAME" >&2
+          exit 1
+        fi
+
+        secret_create "$2"
+        exit $?
+        ;;
+
+      edit)
+        if [[ $# -ne 2 ]]; then
+          echo "Usage: $0 secrets edit NAME" >&2
+          exit 1
+        fi
+
+        secret_edit "$2"
+        exit $?
+        ;;
+
+      view)
+        if [[ $# -ne 2 ]]; then
+          echo "Usage: $0 secrets view NAME" >&2
+          exit 1
+        fi
+
+        secret_view "$2"
+        exit $?
+        ;;
+
+      delete)
+        if [[ $# -ne 2 ]]; then
+          echo "Usage: $0 secrets delete NAME" >&2
+          exit 1
+        fi
+
+        secret_delete "$2"
+        exit $?
+        ;;
+
+      list)
+        if [[ $# -ne 1 ]]; then
+          echo "Usage: $0 secrets list" >&2
+          exit 1
+        fi
+
+        secret_list
+        exit $?
+        ;;
+
+      *)
+        echo "Usage:"
+        echo "  $0 secrets create NAME"
+        echo "  $0 secrets edit NAME"
+        echo "  $0 secrets view NAME"
+        echo "  $0 secrets delete NAME"
+        echo "  $0 secrets list"
+        exit 1
+        ;;
+    esac
+  fi
+
+  if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 workflow.sh [--vars NAME=value ...]"
+    exit 1
+  fi
+
+  load_workflow "$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --vars)
+        if [[ $# -lt 2 ]]; then
+          echo "runner:  --vars requires NAME=value " >&2
+          exit 1
+        fi
+
+        RUNNER_VARS+=("$2")
+        shift 2
+        ;;
+
+      --secrets)
+        if [[ $# -lt 2 ]]; then
+          echo "runner: --secrets requires NAME" >&2
+          exit 1
+        fi
+
+        RUNNER_SECRETS+=("$2")
+        shift 2
+        ;;
+
+      *)
+        echo "runner: unknown option: $1 >&2"
+        echo "Usage: $0 workflow.sh [--vars NAME=value ...] [--secrets NAME ...]"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ ${#TASK_NAMES[@]} -eq 0 ]]; then
+    echo "No tasks found."
+    exit 0
+  fi
+
+  echo "Loaded ${#TASK_NAMES[@]} tasks."
+
+  local i=0
+
+  while (( i < ${#TASK_NAMES[@]} )); do
+
+    while true; do
+      if run_task "$i"; then
+        echo "✓ ${TASK_NAMES[$i]}"
+        break
+      fi
+
+      if handle_failure "$i"; then
+        continue
+      else
+        break
+      fi
+    done
+
+    ((i++))
+  done
+
+  echo
+  echo "========================================"
+  echo " Workflow completed"
+  echo "========================================"
+}
+
+main "$@"
