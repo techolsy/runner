@@ -208,9 +208,6 @@ secret_load() {
     local name="$1"
     local file
     local tmp
-    local var
-    local var_name
-    local var_value
 
     file="$(secret_file "$name")"
 
@@ -228,30 +225,8 @@ secret_load() {
         return 1
     fi
 
-    while IFS= read -r var; do
-        [[ -z "$var" ]] && continue
-        [[ "$var" == \#* ]] && continue
-
-        if [[ "$var" != *=* ]]; then
-            echo "Invalid secret entry in $name: $var" >&2
-            rm -f "$tmp"
-            return 1
-        fi
-
-        var_name="${var%%=*}"
-        var_value="${var#*=}"
-
-        # Basic validation of the environment variable name.
-        if [[ ! "$var_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-            echo "Invalid secret variable name: $var_name" >&2
-            rm -f "$tmp"
-            return 1
-        fi
-
-        printf -v "$var_name" '%s' "$var_value"
-        export "$var_name"
-
-    done < "$tmp"
+    #shellcheck disable=SC1090
+    source "$tmp"
 
     rm -f "$tmp"
 }
