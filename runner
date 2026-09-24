@@ -4,6 +4,7 @@ set -u
 
 RUNNER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$RUNNER_DIR/lib"
+VAR_DIR="$PWD/vars"
 INTERRUPTED=0
 
 handle_interrupt() {
@@ -20,6 +21,12 @@ cleanup_runner() {
 }
 
 trap cleanup_runner EXIT
+
+for var in "$VAR_DIR"/*.sh; do
+  [[ -f "$var" ]] || continue
+  #shellcheck  disable=SC1090
+  source "$var"
+done
 
 for lib in "$LIB_DIR"/*.sh; do
   [[ -f "$lib" ]] || continue
@@ -81,20 +88,11 @@ forget() {
 }
 
 load_persisted_vars() {
-  local var
-  local var_name
-  local var_value
-
-  while IFS= read -r var; do
-    [[ -z "$var" ]] && continue
-
-    var_name="${var%%=*}"
-    var_value="${var#*=}"
-
+  while IFS='=' read -r var_name var_value; do
+    [[ -z "$var_name" ]] && continue
     printf -v "$var_name" '%s' "$var_value"
     #shellcheck disable=SC2163
     export "$var_name"
-
   done < "$PERSIST_FILE"
 }
 
@@ -147,8 +145,13 @@ load_workflow() {
   local workflow="$1"
 
   if [[ ! -f "$workflow" ]]; then
-      echo "Workflow not found: $workflow"
-      exit 1
+    echo "Workflow not found: $workflow"
+    exit 1
+  fi
+
+  if [[ ! -r "$workflow" ]]; then
+    echo "Workflow not readable: $workflow"
+    exit 1
   fi
 
   #shellcheck disable=SC1090
@@ -390,7 +393,7 @@ main() {
         ;;
 
       *)
-        echo "runner: unknown option: $1 >&2"
+        echo "runner: unknown option: $1" >&2
         echo "Usage: $0 workflow.sh [--vars NAME=value ...] [--secrets NAME ...]"
         exit 1
         ;;
