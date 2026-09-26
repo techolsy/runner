@@ -1,232 +1,236 @@
 #!/usr/bin/env bash
 
 SECRETS_DIR="$PWD/secrets"
-SECRET_HELPER="$RUNNER_DIR/runner-secret"
-
 
 secret_file() {
-    local name="$1"
+  local name="$1"
 
-    printf '%s/%s.secret\n' "$SECRETS_DIR" "$name"
+  printf '%s/%s.bin\n' "$SECRETS_DIR" "$name"
 }
-
-
-check_secret_helper() {
-    if [[ ! -x "$SECRET_HELPER" ]]; then
-        echo "runner-secret not found or not executable:" >&2
-        echo "  $SECRET_HELPER" >&2
-        return 1
-    fi
-}
-
 
 secret_encrypt() {
-    local input="$1"
-    local output="$2"
+  local input="$1"
+  local output="$2"
+  local cmd=(
+    "gpg"
+    "-q"
+    "--batch"
+    "--yes"
+    "-o"
+    "$output"
+    "-c"
+    "--cipher-algo"
+    "AES256"
+    "$input"
+  )
+  
+  if [[ -v RUNNER_VAULT_PASSWORD ]]; then
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+  fi
 
-    check_secret_helper || return 1
-
-    "$SECRET_HELPER" encrypt "$input" "$output"
+  command "${cmd[@]}"
 }
-
 
 secret_decrypt() {
-    local input="$1"
-    local output="$2"
+  local input="$1"
+  local output="$2"
+  local cmd=(
+    "gpg"
+    "-q"
+    "--batch"
+    "--yes"
+    "-o"
+    "$output"
+    "--decrypt"
+    "$input"
+  )
 
-    check_secret_helper || return 1
+  if [[ -v RUNNER_VAULT_PASSWORD ]]; then
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+  fi
 
-    "$SECRET_HELPER" decrypt "$input" "$output"
+  command "${cmd[@]}"
 }
 
-
 secret_create() {
-    local name="$1"
-    local file
-    local tmp
+  local name="$1"
+  local file
+  local tmp
 
-    file="$(secret_file "$name")"
+  file="$(secret_file "$name")"
 
-    if [[ -e "$file" ]]; then
-        echo "Secret already exists: $name" >&2
-        return 1
-    fi
+  if [[ -e "$file" ]]; then
+    echo "Secret already exists: $name" >&2
+    return 1
+  fi
 
-    mkdir -p "$SECRETS_DIR"
+  mkdir -p "$SECRETS_DIR"
 
-    tmp="$(mktemp)"
-    chmod 600 "$tmp"
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
 
-    cat > "$tmp" <<'EOF'
+  cat > "$tmp" <<'EOF'
 # Runner secrets
 #
 # Format:
 #
 # NAME=value
 #
-# Lines beginning with # are ignored.
-
+# Lines beginning with # are ignored
 EOF
 
-    if ! "${EDITOR:-vi}" "$tmp"; then
-        rm -f "$tmp"
-        return 1
-    fi
-
-    echo
-    echo "Encrypting secret..."
-
-    if ! secret_encrypt "$tmp" "$file"; then
-        rm -f "$tmp"
-        echo "Failed to encrypt secret." >&2
-        return 1
-    fi
-
+  if ! "${EDITOR:-vi}" "$tmp"; then
     rm -f "$tmp"
+    return 1
+  fi
 
-    chmod 600 "$file"
+  echo
+  echo "Encrypting secret..."
 
-    echo "Created secret: $name"
+  if ! secret_encrypt "$tmp" "$file"; then
+    rm -f "$tmp"
+    echo "Failed to encrypt secret: $name" >&2
+    return 1
+  fi
+
+  rm -f "$tmp"
+  chmod 600 "$file"
+
+  echo "Created secret: $name"
 }
-
 
 secret_edit() {
-    local name="$1"
-    local file
-    local tmp
+  local name="$1"
+  local file
+  local tmp
 
-    file="$(secret_file "$name")"
+  file="$(secret_file "$name")"
 
-    if [[ ! -f "$file" ]]; then
-        echo "Secret not found: $name" >&2
-        return 1
-    fi
+  if [[ ! -f "$file" ]]; then
+    echo "Secret not found: $name" >&2
+    return 1
+  fi
 
-    tmp="$(mktemp)"
-    chmod 600 "$tmp"
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
 
-    if ! secret_decrypt "$file" "$tmp"; then
-        rm -f "$tmp"
-        echo "Failed to decrypt secret." >&2
-        return 1
-    fi
-
-    if ! "${EDITOR:-vi}" "$tmp"; then
-        rm -f "$tmp"
-        return 1
-    fi
-
-    echo
-    echo "Encrypting updated secret..."
-
-    if ! secret_encrypt "$tmp" "$file"; then
-        rm -f "$tmp"
-        echo "Failed to encrypt secret." >&2
-        return 1
-    fi
-
+  if ! secret_decrypt "$file" "$tmp"; then
     rm -f "$tmp"
+    echo "Failed to decrypt secret: $name" >&2
+    return 1
+  fi
 
-    chmod 600 "$file"
+  if ! "${EDITOR:-vi}" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
 
-    echo "Updated secret: $name"
+  echo
+  echo "Encrypting updated secret..."
+
+  if ! secret_encrypt "$tmp" "$file"; then
+    rm -f "$tmp"
+    echo "Failed to encrypt secret: $name" >&2
+    return 1
+  fi
+
+  rm -f "$tmp"
+  chmod 600 "$file"
+
+  echo "Updated secret: $name"
 }
-
 
 secret_view() {
-    local name="$1"
-    local file
-    local tmp
+  local name="$1"
+  local file
+  local tmp
 
-    file="$(secret_file "$name")"
+  file=$(secret_file "$name")
 
-    if [[ ! -f "$file" ]]; then
-        echo "Secret not found: $name" >&2
-        return 1
-    fi
+  if [[ ! -f "$file" ]]; then
+    echo "Secret not found: $name" >&2
+    return 1
+  fi
 
-    tmp="$(mktemp)"
-    chmod 600 "$tmp"
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
 
-    trap 'rm -f "$tmp"' RETURN
+  trap 'rm -f "$tmp"' RETURN
 
-    if ! secret_decrypt "$file" "$tmp"; then
-        echo "Failed to decrypt secret." >&2
-        return 1
-    fi
+  if ! secret_decrypt "$file" "$tmp"; then
+    echo "Failed to decrypt secret: $name" >&2
+    return 1
+  fi
 
-    cat "$tmp"
+  cat "$tmp"
 }
-
 
 secret_delete() {
-    local name="$1"
-    local file
+  local name="$1"
+  local file
 
-    file="$(secret_file "$name")"
+  file="$(secret_file "$name")"
 
-    if [[ ! -f "$file" ]]; then
-        echo "Secret not found: $name" >&2
-        return 1
-    fi
+  if [[ ! -f "$file" ]]; then
+    echo "Secret not found: $name" >&2
+    return 1
+  fi
 
-    read -r -p "Delete secret '$name'? [y/N] " answer
+  read -r -p "Delete secret '$name'? [y/N] " answer
 
-    case "$answer" in
-        y|Y|yes|YES)
-            rm -f "$file"
-            echo "Deleted secret: $name"
-            ;;
+  case "$answer" in
+    y|Y|yes|YES)
+      rm -f "$file"
+      echo "Deleted secret: $name"
+      ;;
 
-        *)
-            echo "Cancelled."
-            ;;
-    esac
+    *)
+      echo "Cancelled."
+      ;;
+  esac
 }
-
 
 secret_list() {
-    local found=0
-    local file
+  local found=0
+  local file
 
-    mkdir -p "$SECRETS_DIR"
+  mkdir -p "$SECRETS_DIR"
 
-    for file in "$SECRETS_DIR"/*.secret; do
-        [[ -f "$file" ]] || continue
+  for file in "$SECRETS_DIR"/*.bin; do
+    [[ -f "$file" ]] || continue
 
-        basename "$file" .secret
-        found=1
-    done
+    basename "$file" .bin
+    found=1
+  done
 
-    if (( ! found )); then
-        echo "No secrets found."
-    fi
+  if (( ! found )); then
+    echo "No secrets found."
+  fi
 }
 
-
 secret_load() {
-    local name="$1"
-    local file
-    local tmp
+  local name="$1"
+  local file
+  local tmp
 
-    file="$(secret_file "$name")"
+  file=$(secret_file "$name")
 
-    if [[ ! -f "$file" ]]; then
-        echo "Secret not found: $name" >&2
-        return 1
-    fi
+  if [[ ! -f "$file" ]]; then
+    echo "Secret not found: $name" >&2
+    return 1
+  fi
 
-    tmp="$(mktemp)"
-    chmod 600 "$tmp"
+  tmp="$(mktemp)"
+  chmod 600 "$tmp"
 
-    if ! secret_decrypt "$file" "$tmp"; then
-        rm -f "$tmp"
-        echo "Failed to decrypt secret: $name" >&2
-        return 1
-    fi
-
-    #shellcheck disable=SC1090
-    source "$tmp"
-
+  if ! secret_decrypt "$file" "$tmp"; then
     rm -f "$tmp"
+    echo "Failed to decrypt secret: $name" >&2
+    return 1
+  fi
+
+  #shellcheck disable=SC1090
+  source "$tmp"
+
+  rm -f "$tmp"
 }
