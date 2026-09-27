@@ -4,6 +4,11 @@ msg() {
     local color="$1"
     local message="$2"
     local color_code=""
+
+    if [[ "$#" -eq 1 ]]; then
+      printf "%s\n" "$1"
+      return 0
+    fi
     
     case "$color" in
         red)        color_code="\033[31m" ;;
