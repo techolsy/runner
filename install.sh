@@ -26,7 +26,6 @@ TASK
 
 task "Clone runner into tmp dir" --var URL="https://github.com/techolsy/runner.git" <<'TASK'
 repo_dir="$(mktemp -d)"
-echo "$URL"
 git clone --branch "$VERSION" "$URL" "$repo_dir"
 
 persist repo_dir
