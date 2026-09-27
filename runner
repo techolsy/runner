@@ -4,8 +4,13 @@ set -u
 
 RUNNER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$RUNNER_DIR/lib"
-VAR_DIR="$PWD/vars"
 INTERRUPTED=0
+
+if [[ ! -v RUNNER_VAR_LIB ]]; then
+  VAR_DIR="$PWD/vars"
+else
+  VAR_DIR="$RUNNER_VAR_LIB"
+fi
 
 handle_interrupt() {
   INTERRUPTED=1
