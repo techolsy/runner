@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-SECRETS_DIR="$PWD/secrets"
+if [[ ! -v RUNNER_SECRETS_DIR ]]; then
+  SECRETS_DIR="$PWD/secrets"
+else
+  SECRETS_DIR="$RUNNER_SECRETS_DIR"
+fi
 
 secret_file() {
   local name="$1"
@@ -24,8 +28,8 @@ secret_encrypt() {
     "$input"
   )
   
-  if [[ -v RUNNER_VAULT_PASSWORD ]]; then
-    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+  if [[ -v RUNNER_SECRETS_PASSWORD ]]; then
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_SECRETS_PASSWORD" "${cmd[@]:4}")
   fi
 
   command "${cmd[@]}"
@@ -45,8 +49,8 @@ secret_decrypt() {
     "$input"
   )
 
-  if [[ -v RUNNER_VAULT_PASSWORD ]]; then
-    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+  if [[ -v RUNNER_SECRETS_PASSWORD ]]; then
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_SECRETS_PASSWORD" "${cmd[@]:4}")
   fi
 
   command "${cmd[@]}"
