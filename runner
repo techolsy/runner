@@ -374,7 +374,7 @@ main() {
     case "$1" in
       --vars)
         if [[ $# -lt 2 ]]; then
-          echo "runner:  --vars requires NAME=value " >&2
+          echo "runner: --vars requires NAME=value " >&2
           exit 1
         fi
 
