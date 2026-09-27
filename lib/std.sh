@@ -1,5 +1,24 @@
 #!/usr/bin/env bash
 
+msg() {
+    local color="$1"
+    local message="$2"
+    local color_code=""
+    
+    case "$color" in
+        red)        color_code="\033[31m" ;;
+        green)      color_code="\033[32m" ;;
+        yellow)     color_code="\033[33m" ;;
+        blue)       color_code="\033[34m" ;;
+        magenta)    color_code="\033[35m" ;;
+        cyan)       color_code="\033[36m" ;;
+        white)      color_code="\033[37m" ;;
+        *)          color_code="" ;;
+    esac
+    
+    printf "%b%s%b\n" "$color_code" "$message" "\033[0m"
+}
+
 import_tasks() {
   local task_file="$1"
 
