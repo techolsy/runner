@@ -25,7 +25,7 @@ secret_encrypt() {
   )
   
   if [[ -v RUNNER_VAULT_PASSWORD ]]; then
-    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_SECRETS_PASSWORD" "${cmd[@]:4}")
   fi
 
   command "${cmd[@]}"
@@ -46,7 +46,7 @@ secret_decrypt() {
   )
 
   if [[ -v RUNNER_VAULT_PASSWORD ]]; then
-    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_VAULT_PASSWORD" "${cmd[@]:4}")
+    cmd=("${cmd[@]:0:4}" "--passphrase" "$RUNNER_SECRETS_PASSWORD" "${cmd[@]:4}")
   fi
 
   command "${cmd[@]}"
