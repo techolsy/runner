@@ -22,6 +22,19 @@ EOF
 ./runner build.sh
 ```
 
+## Installation
+You can use the runner to install the runner with `install.sh`
+```bash
+./runner install.sh --vars VERSION=<tag>
+```
+
+This will install the runner in `$HOME/.config/runner/bin/`
+
+You can export that path in your `bashrc/zshrc`
+```bash
+export PATH="$HOME/.config/runner/bin:$PATH"
+```
+
 ## Usage
 ```bash
 ./runner <workflow-file> [OPTIONS]
