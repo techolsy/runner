@@ -3,8 +3,15 @@
 set -u
 
 RUNNER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RUNNER_CONFIG="$PWD/runner.env"
+RUNNER_VERSION="dev"
 LIB_DIR="$RUNNER_DIR/lib"
 INTERRUPTED=0
+
+if [[ -f "$RUNNER_CONFIG" ]]; then
+  #shellcheck  disable=SC1090
+  source "$RUNNER_CONFIG"
+fi
 
 if [[ ! -v RUNNER_VAR_LIB ]]; then
   VAR_DIR="$PWD/vars"
@@ -306,6 +313,11 @@ handle_failure() {
 }
 
 main() {
+  if [[ $# -eq 1 && "$1" == "version" ]]; then
+    echo "Version: $RUNNER_VERSION"
+    exit 0
+  fi
+
   if [[ $# -ge 1 && "$1" == "secrets" ]]; then
     shift
 
