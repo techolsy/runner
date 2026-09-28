@@ -26,7 +26,10 @@ TASK
 
 task "Clone runner into tmp dir" --var URL="https://github.com/techolsy/runner.git" <<'TASK'
 repo_dir="$(mktemp -d)"
-git clone --branch "$VERSION" "$URL" "$repo_dir"
+git clone --branch "$VERSION" "$URL" "$repo_dir" || {
+  echo "Failed to clone $URL with branch $VERSION to $repo_dir"
+  return 1
+}
 
 persist repo_dir
 TASK
@@ -51,9 +54,16 @@ TASK
 
 task "Copy lib files" <<'TASK'
 while read -r file; do
-  cp "$repo_dir/lib/$file" "$conf_dir/lib/$file"
+  cp "$repo_dir/lib/$file" "$conf_dir/lib/$file" || {
+    echo "Could not find: $file"
+    return 1
+  }
   echo "Copied: $file"
 done < <(ls -1 "$repo_dir/lib")
+TASK
+
+task "Set verison" <<'TASK'
+sed -i "s/dev/$VERSION/" "$conf_dir/runner"
 TASK
 
 task "Cleanup" <<'TASK'
