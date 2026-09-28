@@ -56,6 +56,10 @@ while read -r file; do
 done < <(ls -1 "$repo_dir/lib")
 TASK
 
+task "Set verison" <<'TASK'
+sed -i "s/dev/$VERSION/" "$conf_dir/runner"
+TASK
+
 task "Cleanup" <<'TASK'
 rm -fr "$repo_dir"
 
