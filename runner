@@ -5,6 +5,7 @@ set -u
 RUNNER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_CONFIG="$PWD/runner.env"
 RUNNER_VERSION="dev"
+RUNNER_WORKFLOW_FILE=""
 LIB_DIR="$RUNNER_DIR/lib"
 INTERRUPTED=0
 
@@ -172,11 +173,13 @@ load_workflow() {
   fi
 
   #shellcheck disable=SC1090
+  RUNNER_WORKFLOW_FILE="$(basename "${workflow%.*}")"
   source "$workflow"
 }
 
 run_task() {
   local index="$1"
+  local workflow="$RUNNER_WORKFLOW_FILE"
   local name="${TASK_NAMES[$index]}"
   local command="${TASK_COMMANDS[$index]}"
   local vars="${TASK_VARS[$index]}"
@@ -186,7 +189,7 @@ run_task() {
 
   echo
   echo "========================================"
-  echo " Task $((index + 1))/${#TASK_NAMES[@]}: $name"
+  echo " ${workflow} - Task $((index + 1))/${#TASK_NAMES[@]}: $name"
   echo "========================================"
   echo
 
