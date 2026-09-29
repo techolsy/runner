@@ -67,8 +67,6 @@ persist() {
     return 1
   fi
 
-  tmp="$(mktemp)"
-  chmod 600 "$tmp"
   grep -v "^${name}=" "$PERSIST_FILE" > "${PERSIST_FILE}.tmp"
   mv "${PERSIST_FILE}.tmp" "$PERSIST_FILE"
 
