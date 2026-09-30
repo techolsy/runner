@@ -53,13 +53,13 @@ done
 TASK
 
 task "Copy lib files" <<'TASK'
-while read -r file; do
+ls -1 "$repo_dir/lib" | while read -r file; do
   cp "$repo_dir/lib/$file" "$conf_dir/lib/$file" || {
     echo "Could not find: $file"
     return 1
   }
   echo "Copied: $file"
-done < <(ls -1 "$repo_dir/lib")
+done
 TASK
 
 task "Set version" <<'TASK'
