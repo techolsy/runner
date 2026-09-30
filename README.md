@@ -35,6 +35,8 @@ You can export that path in your `bashrc/zshrc`
 export PATH="$HOME/.config/runner/bin:$PATH"
 ```
 
+Or set another install location with `--vars INSTALL_LOCATION="$HOME/local/share/runner"`
+
 ## Usage
 ```bash
 ./runner <workflow-file> [OPTIONS]
@@ -157,8 +159,17 @@ Project/
 |-- vars
 |   `-- users.sh
 `-- workflows
-    |-- build.sh
-    `-- publish.sh
+|   |-- build.sh
+|   `-- publish.sh
+`-- runner.env
+```
+
+## Configuration File
+
+### You can have a `runner.env` at the root project folder
+```text
+RUNNER_VAR_DIR="./vars/prod/"
+RUNNER_SECRETS_DIR="./secrets/dev/"
 ```
 
 ## Interactive Failure Handling
@@ -168,3 +179,8 @@ Project/
     * [e]Edit - Edit the task commands and run it
     * [s]Skip - Skip to next task
     * [a]Abort - Stop the entire workflow
+
+## Enviroment Variables
+    * RUNNER_VAR_DIR: Sets runner variables location
+    * RUNNER_SECRETS_DIR: Sets runner secrets location
+    * RUNNER_SECRETS_PASSWORD: Sets runner secrets passphrase
