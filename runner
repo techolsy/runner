@@ -233,6 +233,7 @@ run_task() {
     done <<< "$secrets"
 
     set -e
+    set -o pipefail
     eval "$command"
   )
 
