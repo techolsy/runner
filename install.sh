@@ -35,7 +35,11 @@ persist repo_dir
 TASK
 
 task "Create directories" <<'TASK'
-conf_dir="$HOME/.config/runner/bin"
+if [[ -v INSTALL_LOCATION ]]; then
+  conf_dir="$INSTALL_LOCATION"
+else
+  conf_dir="$HOME/.config/runner/bin"
+fi
 mkdir -p "$conf_dir/lib"
 
 persist conf_dir
