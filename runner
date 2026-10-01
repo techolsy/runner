@@ -14,10 +14,10 @@ if [[ -f "$RUNNER_CONFIG" ]]; then
   source "$RUNNER_CONFIG"
 fi
 
-if [[ ! -v RUNNER_VAR_LIB ]]; then
+if [[ ! -v RUNNER_VAR_DIR ]]; then
   VAR_DIR="$PWD/vars"
 else
-  VAR_DIR="$RUNNER_VAR_LIB"
+  VAR_DIR="$RUNNER_VAR_DIR"
 fi
 
 handle_interrupt() {
