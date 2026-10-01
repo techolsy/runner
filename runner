@@ -8,6 +8,7 @@ RUNNER_VERSION="dev"
 RUNNER_WORKFLOW_FILE=""
 LIB_DIR="$RUNNER_DIR/lib"
 INTERRUPTED=0
+GLOABL_VARS="$PWD/vars/all.sh"
 
 if [[ -f "$RUNNER_CONFIG" ]]; then
   #shellcheck  disable=SC1090
@@ -40,6 +41,11 @@ for var in "$VAR_DIR"/*.sh; do
   #shellcheck  disable=SC1090
   source "$var"
 done
+
+if [[ -f "$GLOABL_VARS" ]]; then
+  #shellcheck  disable=SC1090
+  source "$GLOABL_VARS"
+fi
 
 for lib in "$LIB_DIR"/*.sh; do
   [[ -f "$lib" ]] || continue
@@ -170,8 +176,8 @@ load_workflow() {
     exit 1
   fi
 
-  #shellcheck disable=SC1090
   RUNNER_WORKFLOW_FILE="$(basename "${workflow%.*}")"
+  #shellcheck disable=SC1090
   source "$workflow"
 }
 
