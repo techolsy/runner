@@ -157,7 +157,8 @@ Project/
 |   |-- create.sh
 |   `-- configure.sh
 |-- vars
-|   `-- users.sh
+|   |-- users.sh
+|   `-- all.sh
 `-- workflows
 |   |-- build.sh
 |   `-- publish.sh
