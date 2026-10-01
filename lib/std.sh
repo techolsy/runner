@@ -32,6 +32,11 @@ import_tasks() {
     return 1
   fi
 
+  if [[ ! -r "$task_file" ]]; then
+    echo "import_tasks: file not readable: $task_file" >&2
+    return 1
+  fi
+
   echo "Importing tasks from: $task_file" >&2
   #shellcheck disable=SC1090
   source "$task_file"
