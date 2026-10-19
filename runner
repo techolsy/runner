@@ -73,7 +73,7 @@ persist() {
     return 1
   fi
 
-  grep -v "^${name}=" "$PERSIST_FILE" > "${PERSIST_FILE}.tmp"
+  grep -v "^${name}=" "$PERSIST_FILE" > "${PERSIST_FILE}.tmp" || true
   mv "${PERSIST_FILE}.tmp" "$PERSIST_FILE"
 
   printf '%s=%s\n' "$name" "${!name}" >> "$PERSIST_FILE"
@@ -442,12 +442,13 @@ main() {
   while (( i < ${#TASK_NAMES[@]} )); do
 
     while true; do
-      if run_task "$i"; then
+      run_task "$i"
+      status="$?"
+      if [[ "$status" == 0 ]]; then
         echo "✓ ${TASK_NAMES[$i]}"
         break
-      fi
-
-      if handle_failure "$i"; then
+      elif [[ "$status" != 0 ]]; then
+        handle_failure "$i"
         continue
       else
         break
