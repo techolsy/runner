@@ -449,7 +449,12 @@ main() {
         break
       elif [[ "$status" != 0 ]]; then
         handle_failure "$i"
-        continue
+        rc="$?"
+        if [[ "$rc" == 0 ]]; then
+          continue
+        else
+          break
+        fi
       else
         break
       fi
